@@ -1,34 +1,42 @@
-# Stage 1: Base image
-FROM node:20-alpine AS base
+# ===== BUILD STAGE =====
+FROM node:20-alpine AS builder
 
-# Stage 2: Builder
-FROM base AS builder
 WORKDIR /app
 
-# Install build dependencies
-COPY package.json package-lock.json ./
-RUN npm install
+COPY package*.json ./
+RUN npm ci
 
-# Copy source code and build
 COPY . .
+ENV GENERATE_SOURCEMAP=false
+
+# build production
 RUN npm run build
 
-# Stage 3: Runner
-FROM base AS runner
-WORKDIR /app
+# ===== RUNTIME STAGE =====
+FROM nginx:1.25-alpine
 
-ENV NODE_ENV=production
-ENV PORT=5000
+RUN rm /etc/nginx/conf.d/default.conf
 
-# Install production dependencies only
-COPY package.json package-lock.json ./
-RUN npm install --omit=dev
+RUN touch /var/run/nginx.pid && \
+    chown -R nginx:nginx /var/run/nginx.pid /var/cache/nginx /var/log/nginx /etc/nginx/conf.d /usr/share/nginx/html
 
-# Copy built application
-COPY --from=builder /app/dist ./dist
+COPY nginx/nginx.conf /etc/nginx/nginx.conf
+COPY nginx/conf.d /etc/nginx/conf.d
 
-# Expose the application port
-EXPOSE 5000
+COPY --from=builder /app/dist/public /usr/share/nginx/html
 
-# Start the application
-CMD ["node", "dist/index.js"]
+USER nginx
+
+HEALTHCHECK --interval=10s --timeout=5s --retries=3 \
+  CMD sh -c '\
+    FILE=$(find /usr/share/nginx/html/assets -type f -name "*.js" | head -n 1); \
+    [ -f "$FILE" ] || exit 1; \
+    NAME=$(basename "$FILE"); \
+    DISK_SHA=$(sha256sum "$FILE" | cut -d" " -f1); \
+    LIVE_SHA=$(wget -qO- http://127.0.0.1/assets/$NAME | sha256sum | cut -d" " -f1); \
+    [ -n "$LIVE_SHA" ] || exit 1; \
+    [ "$DISK_SHA" = "$LIVE_SHA" ] || exit 1; \
+    exit 0; \
+  '
+EXPOSE 80
+# CMD ["nginx", "-g", "daemon off;"]
