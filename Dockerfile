@@ -9,11 +9,10 @@ RUN npm ci
 COPY . .
 ENV GENERATE_SOURCEMAP=false
 
-# build production
 RUN npm run build
 
 # ===== RUNTIME STAGE =====
-FROM nginx:1.25-alpine
+FROM nginx:1.29-alpine-slim
 
 RUN rm /etc/nginx/conf.d/default.conf
 
@@ -39,4 +38,3 @@ HEALTHCHECK --interval=10s --timeout=5s --retries=3 \
     exit 0; \
   '
 EXPOSE 80
-# CMD ["nginx", "-g", "daemon off;"]
