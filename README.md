@@ -231,7 +231,7 @@ server {
 ```
 
 ### 2.3. File `Dockerfile`
-File dùng thuật toán biên dịch vùng (Multi-Stage Build).
+File dùng Multi-Stage Build.
 
 ```dockerfile
 # ===== BUILD STAGE =====
